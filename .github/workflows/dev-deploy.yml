@@ -7,15 +7,28 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  AWS_S3_BUCKET_NAME: ${{ secrets.DEV_AWS_S3_BUCKET_NAME }}
-  AWS_LAMBDA_FUNCTION_NAME: ${{ secrets.DEV_LAMBDA_FUNCTION_NAME }}
-  AWS_CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.DEV_CLOUDFRONT_DISTRIBUTION_ID }}
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          - name: pudding
+            bucket: pudding-dev
+            lambda: cf-dev-pudding-im
+            distribution: E3BHGGV6V1UVA0
+          - name: sense
+            bucket: sense-server-dev
+            lambda: cf-dev-sens-im
+            distribution: EPOKMYRNE8523
+          - name: senselab
+            bucket: lab-sense-dev
+            lambda: cf-dev-lab-sense-im
+            distribution: E35M47GTMD3094
+
+    name: Deploy ${{ matrix.project.name }}
 
     steps:
       - name: Checkout code
@@ -24,8 +37,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Set up Node.js
@@ -35,7 +48,7 @@ jobs:
 
       - name: Set Bucket Name
         env:
-          BUCKET_NAME: ${{ env.AWS_S3_BUCKET_NAME }}
+          BUCKET_NAME: ${{ matrix.project.bucket }}
         run: node .github/actions/set-bucket-name.js
 
       - name: Install dependencies
@@ -52,11 +65,9 @@ jobs:
 
       - name: Deploy Lambda Function
         id: deploy_lambda
-        env:
-          LAMBDA_FUNCTION_NAME: ${{ env.AWS_LAMBDA_FUNCTION_NAME }}
         run: |
           LAMBDA_VERSION=$(aws lambda update-function-code \
-            --function-name $LAMBDA_FUNCTION_NAME \
+            --function-name ${{ matrix.project.lambda }} \
             --zip-file fileb://dist/function.zip \
             --publish \
             --query 'Version' \
@@ -65,13 +76,13 @@ jobs:
           echo "LAMBDA_VERSION=$LAMBDA_VERSION" >> $GITHUB_OUTPUT
 
           echo "Waiting for Lambda function to become active..."
-          aws lambda wait function-active-v2 --function-name $LAMBDA_FUNCTION_NAME:$LAMBDA_VERSION
+          aws lambda wait function-active-v2 --function-name ${{ matrix.project.lambda }}:$LAMBDA_VERSION
 
           echo "Lambda function is now active"
 
       - name: Update Cloudfront for Deploying Lambda@Edge
         env:
-          LAMBDA_FUNCTION_NAME: ${{ env.AWS_LAMBDA_FUNCTION_NAME }}
+          LAMBDA_FUNCTION_NAME: ${{ matrix.project.lambda }}
           LAMBDA_FUNCTION_VERSION: ${{ steps.deploy_lambda.outputs.LAMBDA_VERSION }}
-          CLOUDFRONT_DISTRIBUTION_ID: ${{ env.AWS_CLOUDFRONT_DISTRIBUTION_ID }}
+          CLOUDFRONT_DISTRIBUTION_ID: ${{ matrix.project.distribution }}
         run: node .github/actions/update-cloudfront.js
