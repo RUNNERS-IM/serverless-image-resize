@@ -21,7 +21,7 @@ jobs:
             distribution: E3BHGGV6V1UVA0
           - name: sense
             bucket: sense-server-dev
-            lambda: cf-dev-sens-im
+            lambda: cf-dev-sense-im
             distribution: EPOKMYRNE8523
           - name: senselab
             bucket: lab-sense-dev

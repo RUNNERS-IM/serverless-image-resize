@@ -21,7 +21,7 @@ jobs:
             distribution: E2O7HSFFHUFJ6S
           - name: sense
             bucket: sense-server-prod
-            lambda: cf-sens-im
+            lambda: cf-sense-im
             distribution: E2OYIKTKZ5M0X8
           - name: senselab
             bucket: lab-sense-prod
