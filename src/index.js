@@ -85,84 +85,65 @@ const getValidatedQueryParams = request => {
   });
 };
 
-const getResizedImage = (imageBuffer, { width, height, format, quality }) =>
-  new Promise(async (resolve, reject) => {
+// new Promise(async ...) 안티패턴 제거 — Promise constructor는 async 함수의 throw를 잡지 못해
+// Unhandled Promise Rejection을 일으킴. async/await + try/catch 패턴으로 통일.
+const getResizedImage = async (imageBuffer, { width, height, format, quality }) => {
+  try {
     const sharpInstance = Sharp(imageBuffer);
-
-    const { width: originWidth, height: originHeight } =
+    const { width: originWidth = 0, height: originHeight = 0 } =
       await sharpInstance.metadata();
 
     // 원본 이미지보다 크게 요청할 경우 원본 반환.
     if (originWidth < (width ?? 0) || originHeight < (height ?? 0)) {
-      return reject("Requested size is larger than the original image");
+      throw new Error("Requested size is larger than the original image");
     }
 
-    sharpInstance
+    const resizedImage = await sharpInstance
       .resize(width, height)
-      .toFormat(format, {
-        quality,
-      })
+      .toFormat(format, { quality })
       .withMetadata() // 이미지 크기조절시 임의로 이미지 회전하는 상황 방지
-      .toBuffer()
-      .then(resizedImage => {
-        if (Buffer.byteLength(resizedImage, "base64") >= 1048576) {
-          return reject("The response image size is over 1MB");
-        }
-        return resolve(resizedImage);
-      })
-      .catch(error => {
-        return reject(`Sharp Error: ${JSON.stringify(error)}`);
-      });
-  });
+      .toBuffer();
+
+    if (Buffer.byteLength(resizedImage, "base64") >= 1048576) {
+      throw new Error("The response image size is over 1MB");
+    }
+
+    return resizedImage;
+  } catch (error) {
+    throw new Error(`Sharp Error: ${error?.message || JSON.stringify(error)}`);
+  }
+};
 
 exports.handler = async (event, context, callback) => {
   const { request, response } = event.Records[0].cf;
 
-  const { width, height, quality, format } = await getValidatedQueryParams(
-    request
-  ).catch(error => {
-    console.log("Invalid query parameters", error);
+  // 어떤 단계에서든 실패하면 원본 응답 그대로 통과시키는 단일 fallback.
+  // (이전 코드는 각 step 마다 catch + callback(null, response) 반환 → 후속 step이 undefined로 진행하다
+  //  unhandled rejection 발생 가능. 단일 try/catch로 통일.)
+  try {
+    const params = await getValidatedQueryParams(request);
+    const s3Image = await getImageFromS3({
+      Bucket: BUCKET,
+      Key: decodeURIComponent(request.uri).substring(1),
+    });
+    const imageBuffer = await streamToBuffer(s3Image.Body);
+    const resizedImage = await getResizedImage(imageBuffer, params);
 
+    console.log("Success resizing image");
+
+    return callback(null, {
+      ...response,
+      body: resizedImage.toString("base64"),
+      contentHeader: [
+        {
+          key: "Content-Type",
+          value: `image/${params.format}`,
+        },
+      ],
+      bodyEncoding: "base64",
+    });
+  } catch (error) {
+    console.log("ResizeImage fallback to original:", error?.message || error);
     return callback(null, response);
-  });
-
-  const s3Image = await getImageFromS3({
-    Bucket: BUCKET,
-    Key: decodeURIComponent(request.uri).substring(1),
-  }).catch(error => {
-    console.log("Error from getImageFromS3 : ", error);
-
-    return callback(null, response);
-  });
-
-  const imageBuffer = await streamToBuffer(s3Image.Body).catch(error => {
-    console.log("Error from streamToBuffer : ", error);
-
-    return callback(null, response);
-  });
-
-  const resizedImage = await getResizedImage(imageBuffer, {
-    width,
-    height,
-    format,
-    quality,
-  }).catch(error => {
-    console.log("Error from getResizedImage : ", error);
-
-    return callback(null, response);
-  });
-
-  console.log("Success resizing image");
-
-  return callback(null, {
-    ...response,
-    body: resizedImage.toString("base64"),
-    contentHeader: [
-      {
-        key: "Content-Type",
-        value: `image/${format}`,
-      },
-    ],
-    bodyEncoding: "base64",
-  });
+  }
 };
