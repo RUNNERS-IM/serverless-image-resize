@@ -16,11 +16,11 @@ jobs:
       matrix:
         project:
           - name: pudding
-            bucket: pudding-dev
+            bucket: runners-pudding-dev
             lambda: cf-dev-pudding-im
             distribution: E3BHGGV6V1UVA0
           - name: sense
-            bucket: sense-server-dev
+            bucket: runners-sense-dev
             lambda: cf-dev-sense-im
             distribution: EPOKMYRNE8523
           - name: senselab

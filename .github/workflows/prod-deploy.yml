@@ -16,19 +16,19 @@ jobs:
       matrix:
         project:
           - name: pudding
-            bucket: pudding-prod
+            bucket: runners-pudding-media
             lambda: cf-pudding-im
             distribution: E2O7HSFFHUFJ6S
           - name: sense
-            bucket: sense-server-prod
+            bucket: runners-sense-media
             lambda: cf-sense-im
             distribution: E2OYIKTKZ5M0X8
           - name: senselab
-            bucket: lab-sense-prod
+            bucket: runners-sense-lab-media
             lambda: cf-lab-sense-im
             distribution: E1J8P6VSCQR4BG
           - name: runners
-            bucket: server.runners.prod
+            bucket: runners-runners-media
             lambda: cf-runners-im
             distribution: E1PCXW4JPCNOUQ
 
