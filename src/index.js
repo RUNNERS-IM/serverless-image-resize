@@ -73,7 +73,8 @@ const getValidatedQueryParams = request => {
 
     const width = parseInt(w, 10) || null;
     const height = parseInt(h, 10) || null;
-    const quality = parseInt(q, 10) || 100;
+    // q 가 없으면 82. 100 은 파일이 몇 배 커지는데 눈으로는 차이가 거의 없다(10-27).
+    const quality = parseInt(q, 10) || 82;
     const format = convertString(f || extension, { from: "jpg", to: "jpeg" });
 
     // 포맷 변환이 없는 GIF 포맷 요청은 원본 반환.
@@ -90,16 +91,10 @@ const getValidatedQueryParams = request => {
 const getResizedImage = async (imageBuffer, { width, height, format, quality }) => {
   try {
     const sharpInstance = Sharp(imageBuffer);
-    const { width: originWidth = 0, height: originHeight = 0 } =
-      await sharpInstance.metadata();
-
-    // 원본 이미지보다 크게 요청할 경우 원본 반환.
-    if (originWidth < (width ?? 0) || originHeight < (height ?? 0)) {
-      throw new Error("Requested size is larger than the original image");
-    }
-
+    // 원본보다 크게 요청해도 원본을 그대로 내주지 않고 원본 크기로 다시 저장한다. 원본이 큰 PNG 인 경우
+    // (예: 848px 짜리 2.5MB 사진을 ?w=900 으로 요청) 원본을 그대로 보내면 화면이 그만큼 무거워진다(10-27).
     const resizedImage = await sharpInstance
-      .resize(width, height)
+      .resize(width, height, { withoutEnlargement: true })
       .toFormat(format, { quality })
       .withMetadata() // 이미지 크기조절시 임의로 이미지 회전하는 상황 방지
       .toBuffer();
