@@ -126,15 +126,15 @@ exports.handler = async (event, context, callback) => {
 
     console.log("Success resizing image");
 
+    // 형식을 바꾼 경우(?f=webp 등) 원본의 Content-Type 을 그대로 두면 webp 내용이 image/jpeg 로 나간다(11-04).
+    // Lambda@Edge 응답 머리말은 소문자 이름을 열쇠로 하는 headers 에 넣어야 반영된다
     return callback(null, {
       ...response,
       body: resizedImage.toString("base64"),
-      contentHeader: [
-        {
-          key: "Content-Type",
-          value: `image/${params.format}`,
-        },
-      ],
+      headers: {
+        ...response.headers,
+        "content-type": [{ key: "Content-Type", value: `image/${params.format}` }],
+      },
       bodyEncoding: "base64",
     });
   } catch (error) {
