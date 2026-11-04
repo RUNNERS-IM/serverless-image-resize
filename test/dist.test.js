@@ -95,4 +95,24 @@ describe("Lambda@Edge Handler", () => {
       { key: "Content-Type", value: "image/png" },
     ]);
   });
+
+  it("should set the content type to the converted format", async () => {
+    event.Records[0].cf.request.querystring = "w=200&f=webp";
+    await handler(event, null, callback);
+    const response = callback.mock.calls[0][1];
+    expect(response.headers["content-type"]).toEqual([
+      { key: "Content-Type", value: "image/webp" },
+    ]);
+    const { format } = await sharp(Buffer.from(response.body, "base64")).metadata();
+    expect(format).toBe("webp");
+  });
+
+  it("should map jpg to image/jpeg", async () => {
+    event.Records[0].cf.request.querystring = "w=200&f=jpg";
+    await handler(event, null, callback);
+    const response = callback.mock.calls[0][1];
+    expect(response.headers["content-type"]).toEqual([
+      { key: "Content-Type", value: "image/jpeg" },
+    ]);
+  });
 });
